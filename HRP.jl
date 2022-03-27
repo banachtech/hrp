@@ -60,7 +60,7 @@ function update!(w, items, Σ)
     end
 end
 
-function hrp(x; input_type = "ret")
+function hrp(x; input_type="ret")
     Σ = fill(0.0, size(x, 2), size(x, 2))
     D = similar(Σ)
     if input_type == "ret"
@@ -77,6 +77,45 @@ function hrp(x; input_type = "ret")
         update!(w, items, Σ)
     end
     return ivp(Σ), w
+end
+
+function hrp(Σ)
+    D = sqrt.(2.0*(1.0.-cov2corr(Σ)))
+    id = 1:size(D,2)
+    w = fill(1.0, size(D,2))
+    while length(id) > 1
+        id, k = split(D, id)
+        v1 = clustervar(Σ, id)
+        v2 = Σ[k,k]
+        α = ivp([v1,v2])[1]
+        w[id] .= w[id] * α
+        w[k] = w[k] * (1. - α) 
+    end
+    return w
+end
+
+function split(D::Matrix{Float64}, id::Union{UnitRange{Int64}, Vector{Int64}})
+    if length(id) == 1
+        return nothing, id
+    end
+    tmp = []
+    for i in id
+        push!(tmp, minimum([D[i,k] for k in setdiff(id, i)]))
+    end
+    k = id[argmax(tmp)]
+    id = setdiff(id, k)
+    return id, k
+end
+
+function hcluster_order(D)
+    n = size(D,2)
+    id = 1:n
+    out = []
+    for i = 1:n
+        id, k = split(D, id)       
+        push!(out, k)
+    end
+    return reverse(collect(Iterators.flatten(out)))
 end
 
 function cov2corr(C)
