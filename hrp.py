@@ -1,4 +1,4 @@
-import argparse, numpy as np
+import argparse, numpy as np, pandas as pd
 from hrputils import calchrp
 
 my_parser = argparse.ArgumentParser()
@@ -8,5 +8,5 @@ args = my_parser.parse_args()
 
 x = np.loadtxt(args.i,delimiter=',', dtype=float)
 w = calchrp(x)
-print(w)
-np.array(w).tofile(args.o, sep=',')
+print(w.sort_index().values)
+w.to_csv(args.o, index=False, sep=',')

@@ -52,5 +52,4 @@ def calchrp(x):
     link=sch.linkage(dist,'single') # linkage matrix
     sortIx = getQuasiDiag(link)
     w = getRecBipart(cov, sortIx)
-    w.sort_index()
-    return w.tolist()
+    return w
