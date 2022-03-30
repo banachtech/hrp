@@ -1,9 +1,6 @@
-module HRP
+using CSV, DataFrames, Statistics, LinearAlgebra, Clustering
 
-using Statistics, LinearAlgebra, Clustering
-
-export hrp, ivp
-
+# Helper functions
 dist(x, y) = norm(collect(skipmissing(x .- y)), 2)
 
 function covar(x, y)
@@ -60,7 +57,7 @@ function update!(w, items, Σ)
     end
 end
 
-function hrp(x; input_type="ret")
+function hrp(x; input_type = "ret")
     Σ = fill(0.0, size(x, 2), size(x, 2))
     D = similar(Σ)
     if input_type == "ret"
@@ -79,62 +76,36 @@ function hrp(x; input_type="ret")
     return ivp(Σ), w
 end
 
-#= function hrp(Σ)
-    D = sqrt.(2.0*(1.0.-cov2corr(Σ)))
-    id = 1:size(D,2)
-    w = fill(1.0, size(D,2))
-    while length(id) > 1
-        id, k = split(D, id)
-        v1 = clustervar(Σ, id)
-        v2 = Σ[k,k]
-        α = ivp([v1,v2])[1]
-        w[id] .= w[id] * α
-        w[k] = w[k] * (1. - α) 
-    end
-    return w
-end =#
-
-function split(D::Matrix{Float64}, id::Union{UnitRange{Int64},Vector{Int64}})
-    if length(id) == 1
-        return nothing, id
-    end
-    tmp = []
-    for i in id
-        push!(tmp, minimum([D[i, k] for k in setdiff(id, i)]))
-    end
-    k = id[argmax(tmp)]
-    id = setdiff(id, k)
-    return id, k
-end
-
-function hcluster_order(D)
-    n = size(D, 2)
-    id = 1:n
-    out = []
-    for i = 1:n
-        id, k = split(D, id)
-        push!(out, k)
-    end
-    return reverse(collect(Iterators.flatten(out)))
-end
-
 function cov2corr(C)
     σinv = diagm(1.0 ./ sqrt.(diag(C)))
     return σinv * C * σinv
 end
 
 function cov2dist(C)
-    R = cov2corr(C)
-    for i ∈ 1:size(R, 2)
-        R[i, i] = 1.0
-    end
-    D = sqrt.(0.5 * (1.0 .- R))
-    for i ∈ 1:size(D, 2)
-        for j ∈ i+1:size(D, 2)
-            D[i, j] = D[j, i]
+    P = cov2corr(C)
+    S = similar(P)
+    for i = 1:size(P, 1)
+        for j = i:size(P, 1)
+            S[i, j] = 2.0 * (1.0 - P[i, j])
+            S[j, i] = S[i, j]
         end
     end
-    return D
+    return S
 end
 
+function parsedata(f)
+    reits = DataFrame(CSV.File(f, missingstring = ["", " ", "#N/A N/A", "NaN", "NA"], dateformat = "yyyy-mm-dd"))
+    rx = reits[2:end, :]
+    rx[:, 2:end] .= log.(reits[2:end, 2:end]) .- log.(reits[1:end-1, 2:end])
+    assets = names(rx)[2:end]
+    rx = Matrix(rx[:, 2:end])
+    return rx, assets
 end
+
+# Compute stuff
+rx, assets = parsedata(ARGS[1])
+rp_wt, hrp_wt = hrp(rx)
+wt = DataFrame(:reits => assets, :rp => rp_wt, :hrp => hrp_wt)
+CSV.write("wts.csv", wt)
+println(wt)
+
